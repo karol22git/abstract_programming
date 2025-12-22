@@ -40,47 +40,198 @@
  *    nie zmieniła się o więcej niż PARAM.
  */
 
- 
+
+double random_double(double MIN, double MAX) {
+    return MIN + (rand() / (double)RAND_MAX) * (MAX - MIN);
+}
+
+std::vector<double> operator*(std::vector<double>& individual, double val) {
+    std::vector<double> result = individual;
+    for(auto &x: result) {
+        x *= val;
+    }
+    return result;
+}
+
+std::vector<double> operator+(std::vector<double>& individual, double val) {
+    std::vector<double> result = individual;
+    for(auto &x: result) {
+        x += val;
+    }
+    return result;
+}
+
+std::vector<double> operator+(std::vector<double>& a, std::vector<double>&b) {
+    std::vector<double> result(a.size());
+    for(size_t i = 0 ; i < a.size() ; ++i) {
+        result[i] = a[i] + b[i];
+    }
+}
+
+std::vector<double> generate_random_vector(size_t size, int MIN, int MAX) {
+    std::vector<double> result(size);
+    for (double& x : result) {
+        x = random_double(MIN,MAX);
+    }
+    return result;
+}
+std::vector<double> inline generate_exact_vector(size_t size,double val) {
+    return std::vector<double> result(size,val);
+   //return result;
+}
+
+double* generate_random_table(size_t size, int MIN, int MAX) {
+    double* result = (double*) malloc(sizeof(double)*size);
+    for(size_t i = 0 ; i < size; ++i) {
+        result[i] = random_double(MIN,MAX);
+    }
+    return result;
+}
+
+double* generate_exact_table(size_t size, double val) {
+    double* result = (double*) malloc(sizeof(double)*size);
+    for(size_t i = 0 ; i < size; ++i) {
+        result[i] = val;
+    }
+    return result;
+}
 template<Type, MIN, MAX>
 struct InitiationPolicy {
     void init(std::vector<Type>& population, std::size_t populationSize);
 };
 
+template<Type, CHANCE, INTENSITY>
+struct MutationPolicy {
+    static void mutate(std::vector<Type>& population);
+};
 
-template<typename Type, int MIN, int MAX>
-struct RandomInitiationPolicy {
-    void init(std::vector<Type> &population, std::size_t populationSize) {
+template<Type, WEIGHT>
+struct CrossoverPolicy {
+    static Type crossover(const Type, const Type);
+}
+template<Type, FIRST, LAST>
+struct SelectionPolicy {
+    static std::pair<Type, Type> select(const std::vector<Type>& population);
+};
+
+template<Type, PARAM>
+struct StopConditionPolicy {
+    static bool shouldStop(const std::vector<Type>& population, std::size_t generation);
+}
+template<int MIN, int MAX>
+struct RandomInitiationPolicy<double> {
+    void init(std::vector<double> &population, std::size_t populationSize) {
         for(size_t i =  0; i < populationSize ; ++i) {
-            population[i] = (rand()%MAX) +MIN;
+            population[i] = random_double(MIN,MAX);
+        }
+    }
+};
+
+template<int MIN, int MAX>
+struct RandomInitiationPolicy<std::vector<double>> {
+    size_t size;
+    RandomInitiationPolicy(size_t s) : size(s) {}
+    void init(std::vector<std::vector<double>> &population, std::size_t populationSize) {
+        for(size_t i =  0; i < populationSize ; ++i) {
+            population[i] = generate_random_vector(size,MIN,MAX);
+        }
+    }
+};
+
+template<int MIN, int MAX,size_t size>
+struct RandomInitiationPolicy<double*> {
+    size_t size;
+    RandomInitiationPolicy(size_t s) : size(s) {}
+    void init(std::vector<double*> &population, std::size_t populationSize) {
+        for(size_t i =  0; i < populationSize ; ++i) {
+            population[i] = generate_random_table(size,MIN,MAX);
         }
     }
 };
 
 template <typename Type, int MIN, int MAX>
 struct LinSpaceInitiationPolicy {
-    void init(std::vector<Type> &populaton, std::size_t populationSize) {
-        double start = MIN;
-        int end = MAX;
-        double step = (MAX-MIN)/populationSize;
-        for(size_t i = start; i < MAX; ++i) {
-            population[i] = start;
-            start =+ step;
+    void init(std::vector<Type> &populaton, std::size_t populationSize);
+};
+
+template <int MIN, int MAX>
+struct LinSpaceInitiationPolicy<double> {
+    void init(std::vector<double> &populaton, std::size_t populationSize) {
+        double current_value = MIN;
+        double end = MAX;
+        double step = (MAX-MIN)/static_cast<double>(populationSize);
+        for(size_t i = 0; i < populationSize; ++i) {
+            population[i] = current_value;
+            current_value += step;
         }
     }
 };
 
+template <int MIN, int MAX>
+struct LinSpaceInitiationPolicy<std::vector<double>> {
+    size_t size;
+    LinSpaceInitiationPolicy(size_t s) : size(s) {}
+    void init(std::vector<std::vector<double>> &populaton, std::size_t populationSize) {
+        double diff = static_cast<double>(MAX-MIN);
+        double epsilon = diff/populationSize;
+        double dx = epsilon/std::sqrt(populationSize);
+        double current_value = static_cast<double>(MIN);
+        for(size_t i = 0; i < populationSize; ++i) {
+            population[i] = generate_exact_vector(size,current_value)
+            current_value += dx;
+        }
+    }
+};
+template <int MIN, int MAX>
+struct LinSpaceInitiationPolicy<double*> {
+    size_t size;
+    LinSpaceInitiationPolicy(size_t s) : size(s) {}
+    void init(std::vector<double*> &populaton, std::size_t populationSize) {
+        double diff = static_cast<double>(MAX-MIN);
+        double epsilon = diff/populationSize;
+        double dx = epsilon/std::sqrt(populationSize);
+        double current_value = static_cast<double>(MIN);
+        for(size_t i = 0; i < populationSize; ++i) {
+            population[i] = generate_exact_table(size,current_value)
+            current_value += dx;
+        }
+    }
+};
+
+
+
 template <typename TYPE, double CHANCE, int INTENSITY>
 struct PerentageMutationPolicy {
     static void mutate(std::vector<Type> &population) {
-        double multiplier_upper_bound = 1 + INTENSITY/100;
-        double multiplier_lower_bound = 1 - INTENSITY/100;
-        double prop = rand()/(double)RAND_MAX;
+        double multiplier_upper_bound = 1.0 + INTENSITY/100.0;
+        double multiplier_lower_bound = 1.0 - INTENSITY/100.0;
         for(size_t i = 0; i<population.size() ; ++i) {
             double prop = rand()/(double)RAND_MAX;
             if(p > CHANCE){
                 double multiplier = multiplier_lower_bound +
                 (rand() / (double)RAND_MAX) * multiplier_upper_bound;
-                population[i] *= multiplier; 
+                population[i] = population[i]*multiplier; 
+            }
+        }
+    }
+};
+
+template <double CHANCE, int INTENSITY>
+struct PerentageMutationPolicy<double*> {
+    size_t size;
+    PerentageMutationPolicy(size_t s): size(s) {}
+    static void mutate(std::vector<Type> &population) {
+        double multiplier_upper_bound = 1.0 + INTENSITY/100.0;
+        double multiplier_lower_bound = 1.0 - INTENSITY/100.0;
+        for(size_t i = 0; i<population.size() ; ++i) {
+            double prop = rand()/(double)RAND_MAX;
+            if(p > CHANCE){
+                double multiplier = multiplier_lower_bound +
+                (rand() / (double)RAND_MAX) * multiplier_upper_bound;
+                for(size_t j = 0 ;  j < size ; ++j) {
+                    population[i][j] *= multiplier;
+                }
+                //population[i] = population[i]*multiplier; 
             }
         }
     }
@@ -97,16 +248,52 @@ struct AbsoluteMutationPolicy {
             if(p > CHANCE){
                 double multiplier = lower_bound +
                 (rand() / (double)RAND_MAX) * upper_bound;
-                population[i] += multiplier; 
+                population[i] =population[i]+ multiplier; 
             }
         }
     }
 };
 
+template <double CHANCE, int INTENSITY>
+struct AbsoluteMutationPolicy<double*> {
+    size_t size;
+    AbsoluteMutationPolicy(size_t s): size(s) {}
+    static void mutate(std::vector<Type> &population) {
+        double upper_bound = INTENSITY;
+        double lower_bound = -INTENSITY;
+        double prop = rand()/(double)RAND_MAX;
+        for(size_t i = 0; i<population.size() ; ++i) {
+            double prop = rand()/(double)RAND_MAX;
+            if(p > CHANCE){
+                double multiplier = lower_bound +
+                (rand() / (double)RAND_MAX) * upper_bound;
+                for(size_t j = 0 ;  j <size ; ++j) {
+                    population[i][j] += multiplier;
+                }
+                //population[i] =population[i]+ multiplier; 
+            }
+        }
+    }
+};
+
+
 template <typename TYPE, double WEIGHT>
 struct AverageCrossoverPolicy {
     static Type crossover(const Type& a, const Type& b) {
-        return (WEIGHT*a+(1-WEIGHT)*b)/2;
+        return (WEIGHT/2)*a+((1-WEIGHT)/2)*b;
+    }
+};
+
+template <double WEIGHT>
+struct AverageCrossoverPolicy<double*> {
+    size_t size;
+    AverageCrossoverPolicy(size_t s) : size(s){}
+    static double* crossover(const double* &a, const double* &b) {
+        double* result = (double*) malloc(sizeof(double)*size);
+        for(size_t i = 0 ; i< size; ++i) {
+            result[i] = (WEIGHT/2)*a[i]+((1-WEIGHT)/2)*b[i]
+        }
+        return result;
     }
 };
 
@@ -114,7 +301,21 @@ template<typename TYPE>
 struct RandomCrosssoverPolicy {
     static Type crossover(const Type& a, const Type &b) {
         double WEIGHT = rand()/(double)RAND_MAX;
-        return (WEIGHT*a+(1-WEIGHT)*b)2;
+        return (WEIGHT/2)*a+((1-WEIGHT)/2)*b;
+    }
+};
+
+template<>
+struct RandomCrosssoverPolicy<double*> {
+    size_t size;
+    RandomCrossoverPolicy(size_t s) : size(s){}
+    static Type crossover(const double*& a, const double* &b) {
+        double WEIGHT = rand()/(double)RAND_MAX;
+        double* result = (double*) malloc(sizeof(double)*size);
+        for(size_t i = 0 ; i< size; ++i) {
+            result[i] = (WEIGHT/2)*a[i]+((1-WEIGHT)/2)*b[i]
+        }
+        return result;
     }
 };
 
@@ -259,9 +460,17 @@ struct MaxGenStopConditionPolicy {
 
     }
 };
-template<typename TYPE>
-double PoliczSrednia(std::vector<TYPE> population) {
-    return 1.0;
+double Average(std::vector<double> population) {
+    double sum = 0.0;
+    for(auto x: population) sum+=x;
+    return sum/population.size();
+}
+std::vector<double> Average(std::vector<std::vector<double>> population) {
+    std::vector<double> result;
+    for(auto x: population) result = result +x;
+    for(auto &x: result) x/=population[0].size();
+    return result;
+
 }
 template<typename TYPE, double PARAM>
 struct StableAvgStopConditionPolicy {
@@ -292,8 +501,7 @@ struct MutationPolicy {
 template<Type, WEIGHT>
 struct CrossoverPolicy {
     static Type crossover(const Type, const Type);
-};
-
+}
 template<Type, FIRST, LAST>
 struct SelectionPolicy {
     static std::pair<Type, Type> select(const std::vector<Type>& population);
@@ -302,8 +510,7 @@ struct SelectionPolicy {
 template<Type, PARAM>
 struct StopConditionPolicy {
     static bool shouldStop(const std::vector<Type>& population, std::size_t generation);
-};
-
+}
 template <Type, InitiationPolicy, MutationPolicy, CrossoverPolicy, selectionPolicy, StopConditionPolicy>
 class EvolutionaryAlgorithm {
 public:
